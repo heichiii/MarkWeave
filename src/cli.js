@@ -4,24 +4,25 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {parseArgs} from 'node:util';
 import {chromium} from 'playwright';
-import {parser,sections,wrap,slides,flow,slideScript,slideNav,flowScript} from './render.js';
+import {parser,sections,wrap,slides,flow,slideScript,slideNavigation,flowScript,messages} from './render.js';
 
 export async function browserLaunch() {
  const options={headless:true};
  if(process.env.MYMD_BROWSER) return chromium.launch({...options,executablePath:process.env.MYMD_BROWSER});
  try{return await chromium.launch(options);}catch(first){try{return await chromium.launch({...options,channel:'msedge'});}catch{throw new Error('找不到浏览器。请运行 npx playwright install chromium，或设置 MYMD_BROWSER 为浏览器路径。',{cause:first});}}
 }
-export async function render(input,{mode='document',format='html',output,level=2}={}) {
+export async function render(input,{mode='document',format='html',output,level=2,language='zh-CN'}={}) {
+ const text=messages(language);
  if(!['document','slides','flow'].includes(mode))throw Error('mode 必须是 document、slides 或 flow');
  if(!(mode==='flow'?['html','svg','png']:['html','pdf']).includes(format))throw Error('此模式不支持该导出格式');
  if(!Number.isInteger(level)||level<1||level>6)throw Error('slide-level 必须为 1 到 6');
  input=path.resolve(input);output=path.resolve(output||`output/${path.parse(input).name}.${mode}.${format}`);
  if(input===output)throw Error('输出不能覆盖输入文件');
- const md=parser(path.dirname(input)),source=await fs.readFile(input,'utf8'),tokens=md.lexer(source),title=path.parse(input).name;
+ const md=parser(path.dirname(input),{math:mode==='slides'}),source=await fs.readFile(input,'utf8'),tokens=md.lexer(source),title=path.parse(input).name;
  let svg,html;
- if(mode==='document')html=wrap(title,mode,`<main>${md.parser(tokens)}</main>`);
- if(mode==='slides')html=wrap(title,mode,`<main>${slides(tokens,md,level)}</main>${slideNav}`,slideScript);
- if(mode==='flow'){svg=flow(sections(tokens));html=wrap(title,mode,`<main id="viewport"><div id="graph">${svg}</div></main><nav><span>滚轮缩放 · 拖动平移</span><button id="fit">适应窗口</button></nav>`,flowScript);}
+ if(mode==='document')html=wrap(title,mode,`<main>${md.parser(tokens)}</main>`,'',language);
+ if(mode==='slides')html=wrap(title,mode,`<main>${slides(tokens,md,level,language)}</main>${slideNavigation(language)}`,slideScript,language,path.basename(input));
+ if(mode==='flow'){svg=flow(sections(tokens));html=wrap(title,mode,`<main id="viewport"><div id="graph">${svg}</div></main><nav><span>${text.pan}</span><button id="fit">${text.fit}</button></nav>`,flowScript,language);}
  await fs.mkdir(path.dirname(output),{recursive:true});
  if(format==='html'||format==='svg')await fs.writeFile(output,format==='svg'?svg:html);
  else {
@@ -37,11 +38,11 @@ export async function render(input,{mode='document',format='html',output,level=2
  return output;
 }
 async function main(){
- const {values,positionals}=parseArgs({allowPositionals:true,options:{mode:{type:'string',default:'document'},format:{type:'string'},output:{type:'string',short:'o'},'slide-level':{type:'string',default:'2'},preview:{type:'boolean'},help:{type:'boolean',short:'h'}}});
- if(values.help||!positionals.length){console.log('用法：node src/cli.js input.md --mode document|slides|flow [--format html|pdf|svg|png] [-o 文件] [--slide-level 2] [--preview]');return;}
+ const {values,positionals}=parseArgs({allowPositionals:true,options:{mode:{type:'string',default:'document'},format:{type:'string'},output:{type:'string',short:'o'},'slide-level':{type:'string',default:'2'},language:{type:'string',default:'zh-CN'},preview:{type:'boolean'},help:{type:'boolean',short:'h'}}});
+ if(values.help||!positionals.length){console.log('用法：node src/cli.js input.md --mode document|slides|flow [--format html|pdf|svg|png] [-o 文件] [--slide-level 2] [--language zh-CN|en] [--preview]');return;}
  if(positionals.length!==1)throw Error('每次输入一个 Markdown 文件');
  const format=values.format||(values.output?path.extname(values.output).slice(1):'html');
- const output=await render(positionals[0],{mode:values.mode,format,output:values.output,level:Number(values['slide-level'])});console.log(output);
+ const output=await render(positionals[0],{mode:values.mode,format,output:values.output,level:Number(values['slide-level']),language:values.language});console.log(output);
  if(values.preview){const browser=await chromium.launch({headless:false,...(process.env.MYMD_BROWSER?{executablePath:process.env.MYMD_BROWSER}:process.platform==='win32'?{channel:'msedge'}:{})});const page=await browser.newPage();await page.goto(pathToFileURL(output).href);console.log('关闭预览浏览器即可退出。');}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href)main().catch(e=>{console.error('mymd:',e.message);process.exitCode=1;});

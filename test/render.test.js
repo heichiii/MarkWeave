@@ -8,7 +8,43 @@ test('标题解析保留跳级、前言，忽略代码块里的伪标题',()=>{
  assert.equal(root.children.length,1);assert.deepEqual(root.children[0].children.map(n=>n.title),['子','同级父节点']);assert.equal(root.children[0].body.find(t=>t.type==='code').text,'## 不是标题');
 });
 test('拒绝错误参数与覆盖源文件',async()=>{
+ await assert.rejects(render('examples/slides.md',{mode:'slides',language:'invalid'}),/language/);
  await assert.rejects(render('examples/document.md',{mode:'bad'}));await assert.rejects(render('examples/document.md',{output:'examples/document.md'}));await assert.rejects(render('examples/document.md',{format:'png'}));
+});
+test('公式离线渲染、分页保持完整，中英文提示和文件名页脚',async()=>{
+ await fs.mkdir('tmp/qa',{recursive:true});
+ const input='tmp/qa/公式 & demo.md';
+ const formula=String.raw`\frac{a_1^2+b_2^2}{\sqrt{x}}`;
+ const source=`## 公式 $E=mc^2$\n\n中文行内$x^2$公式。\n\n`+Array.from({length:12},()=>`$$\n${formula}\n$$\n\n`).join('')+'`$code$`\n\n```tex\n$literal$\n```\n\n\\$5\n\n$\\frac{$';
+ await fs.writeFile(input,source);
+ const browser=await browserLaunch();
+ try {
+  for(const language of ['zh-CN','en']) {
+   const output=await render(input,{mode:'slides',language,output:`tmp/qa/math-${language}.html`});
+   const page=await browser.newPage({viewport:{width:1400,height:950}});
+   const requests=[];page.on('request',request=>{if(/^https?:/.test(request.url()))requests.push(request.url());});
+   await page.goto(new URL('file:///'+output.replaceAll('\\','/')).href);
+   await page.evaluate(()=>window.ready);
+   assert.equal(await page.locator('html').getAttribute('lang'),language);
+   assert.equal(await page.locator('#full').textContent(),language==='en'?'Fullscreen':'全屏');
+   assert.equal(await page.locator('#present').textContent(),language==='en'?'Present / Overview':'演示 / 总览');
+   const count=await page.locator('.slide').count();assert.ok(count>1);
+   assert.match(await page.locator('.slide').nth(1).locator('h1').textContent(),language==='en'?/Continued 1/:/续页 1/);
+   assert.equal(await page.locator('.content .katex-display').count(),12);
+   assert.equal(await page.locator('.content .katex-display .katex-html').count(),12);
+   assert.equal(await page.locator('.slide h1 .katex').count(),count);
+   assert.equal(await page.locator('code .katex').count(),0);
+   assert.match(await page.locator('pre code').textContent(),/\$literal\$/);
+   assert.equal(await page.locator('.katex-error').count(),1);
+   assert.equal(await page.evaluate(()=>[...document.querySelectorAll('.content')].some(el=>el.scrollHeight>el.clientHeight+1)),false);
+   assert.equal(await page.evaluate(()=>[...document.fonts].some(font=>font.family.startsWith('KaTeX')&&font.status==='loaded')),true);
+   assert.deepEqual(requests,[]);
+   await page.click('#present');await page.keyboard.press('ArrowRight');
+   assert.equal(await page.locator('.slide.active footer').textContent(),`公式 & demo.md / 2 / ${count}`);
+   await page.screenshot({path:`tmp/qa/math-${language}.png`});
+   await page.close();
+  }
+ } finally {await browser.close();}
 });
 test('长段落、列表、代码跨页无丢失，无垂直溢出；演示可翻页',async()=>{
  const md=parser('.'),source='# 压力测试\n\n## 长页\n\n'+'完整保留长段落内容。'.repeat(350)+'\n\n'+Array.from({length:45},(_,i)=>'- 验收条目 '+i).join('\n')+'\n\n```js\n'+Array.from({length:70},(_,i)=>'const value'+i+' = '+i+';').join('\n')+'\n```';
@@ -17,7 +53,7 @@ test('长段落、列表、代码跨页无丢失，无垂直溢出；演示可�
  const result=await page.evaluate(()=>({count:document.querySelectorAll('.slide').length,overflow:[...document.querySelectorAll('.content')].some(e=>e.scrollHeight>e.clientHeight+1),text:[...document.querySelectorAll('.content')].map(e=>e.textContent).join('')}));
  assert.ok(result.count>5);assert.equal(result.overflow,false);
  const reference=await browser.newPage();await reference.setContent(`<main>${body}</main>`);const expected=await reference.locator('.content').allTextContents();assert.equal(result.text.replace(/\s/g,''),expected.join('').replace(/\s/g,''));
- await page.click('#present');await page.keyboard.press('ArrowRight');assert.equal(await page.locator('.slide.active footer').textContent(),`MYMD / 2 / ${result.count}`);
+ await page.click('#present');await page.keyboard.press('ArrowRight');assert.equal(await page.locator('.slide.active footer').textContent(),`test / 2 / ${result.count}`);
  }finally{await browser.close();}
 });
 test('三份样例预览无脚本错误、图片可解码并保存检查图',async()=>{
