@@ -3,6 +3,21 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {parser,sections,slides,wrap,slideScript,slideNav} from '../src/render.js';
 import {browserLaunch,render} from '../src/cli.js';
+test('幻灯片只按星号分隔线分页，标题与代码不触发分页',()=>{
+ const md=parser('.');
+ const source='***\n\n# 第一页\n\n## 页内标题\n\n# 另一个一级标题\n\n```md\n***\n```\n\n---\n\n___\n\n***\n\n***\n\n## 第二页\n\n[链接][ref]\n\n* * *\n\n正文页\n\n***\n\n[ref]: https://example.com\n';
+ const html=slides(md.lexer(source),md);
+ assert.equal((html.match(/<section /g)||[]).length,3);
+ const pages=html.split('</section>');
+ assert.match(pages[0],/<h2>页内标题<\/h2>/);
+ assert.match(pages[0],/<h1>另一个一级标题<\/h1>/);
+ assert.match(pages[0],/<pre><code>\*\*\*/);
+ assert.equal((pages[0].match(/<hr>/g)||[]).length,2);
+ assert.match(pages[1],/<h1>第二页<\/h1>/);
+ assert.match(pages[1],/href="https:\/\/example.com"/);
+ assert.match(pages[2],/正文页/);
+ assert.match(slides(md.lexer('***\n\n***'),md,'en'),/<h1>Empty document<\/h1>/);
+});
 test('标题解析保留跳级、前言，忽略代码块里的伪标题',()=>{
  const md=parser('.'),root=sections(md.lexer('前言\n\n# 根\n\n```md\n## 不是标题\n```\n\n### 子\n\n## 同级父节点\n'));
  assert.equal(root.children.length,1);assert.deepEqual(root.children[0].children.map(n=>n.title),['子','同级父节点']);assert.equal(root.children[0].body.find(t=>t.type==='code').text,'## 不是标题');
