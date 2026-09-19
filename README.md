@@ -65,8 +65,38 @@ node src/cli.js -c examples/slides.config.json --format pdf -o output/slides.pdf
 | `output` | 非空字符串 | 当前目录下的 `output/输入名.模式.格式` |
 | `language` | `zh-CN` / `en` | `zh-CN` |
 | `preview` | JSON 布尔值 | `false` |
+| `logo` | 对象，包含 `path`、`scale`、`position` | 不显示 Logo，仅 slides 使用 |
 
 配置中 `input` 和 `output` 的相对路径以配置文件所在目录为基准，命令行中的相对路径以当前工作目录为基准。显式设置的 `format`（包括配置中的值）优先于输出扩展名推断；修改导出类型时建议同时指定 `--format` 和 `-o`。配置文件必须是 JSON 对象，不支持注释，未知字段和错误的字段类型会报错。
+
+### 幻灯片 Logo
+
+在配置中添加 `logo`，会在每张幻灯片（包括自动续页）显示同一张图片，HTML 演示和 PDF 导出均支持：
+
+```json
+{
+  "input": "presentation.md",
+  "mode": "slides",
+  "logo": {
+    "path": "assets/logo.png",
+    "scale": 1,
+    "position": "top-right"
+  }
+}
+```
+
+- `path`：本地图片路径，支持 PNG、JPEG、SVG、GIF、WebP；相对路径以配置文件所在目录为基准。图片嵌入 HTML，可离线查看。
+- `scale`：缩放倍率，默认 `1`，范围为大于 `0` 且不超过 `3`。基准显示区域为 120×48 像素；例如 `1.5` 为 180×72。图片保持比例、完整显示。
+- `position`：`top-left`（左上）、`top-right`（右上，默认）、`bottom-left`（左下）、`bottom-right`（右下）。距左右边缘 64 像素、上下边缘 24 像素。排版会预留 Logo 区域，左下角 Logo 会将页脚向右移。
+
+命令行可逐项覆盖，未指定的字段沿用配置：
+
+```sh
+node src/cli.js -c examples/slides.config.json --logo-scale 1.5 --logo-position bottom-right
+node src/cli.js input/presentation.md --mode slides --logo examples/assets/logo.svg --logo-scale 0.8
+```
+
+`--logo` 的相对路径以当前工作目录为基准。省略整个 `logo` 配置且不传 Logo 参数时，不显示 Logo。示例配置使用 `examples/assets/logo.svg` 占位图片，可替换为自己的品牌图片。
 
 ## 渲染规则
 

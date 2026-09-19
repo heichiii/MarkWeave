@@ -11,7 +11,7 @@ export async function browserLaunch() {
  if(process.env.MYMD_BROWSER) return chromium.launch({...options,executablePath:process.env.MYMD_BROWSER});
  try{return await chromium.launch(options);}catch(first){try{return await chromium.launch({...options,channel:'msedge'});}catch{throw new Error('找不到浏览器。请运行 npx playwright install chromium，或设置 MYMD_BROWSER 为浏览器路径。',{cause:first});}}
 }
-export async function render(input,{mode='document',format='html',output,language='zh-CN'}={}) {
+export async function render(input,{mode='document',format='html',output,language='zh-CN',logo}={}) {
  const text=messages(language);
  if(!['document','slides','flow'].includes(mode))throw Error('mode 必须是 document、slides 或 flow');
  if(!(mode==='flow'?['html','svg','png']:['html','pdf']).includes(format))throw Error('此模式不支持该导出格式');
@@ -20,7 +20,7 @@ export async function render(input,{mode='document',format='html',output,languag
  const md=parser(path.dirname(input),{math:mode==='slides'}),source=await fs.readFile(input,'utf8'),tokens=md.lexer(source),title=path.parse(input).name;
  let svg,html;
  if(mode==='document')html=wrap(title,mode,`<main>${md.parser(tokens)}</main>`,'',language);
- if(mode==='slides')html=wrap(title,mode,`<main>${slides(tokens,md,language)}</main>${slideNavigation(language)}`,slideScript,language,path.basename(input));
+ if(mode==='slides')html=wrap(title,mode,`<main>${slides(tokens,md,language,logo)}</main>${slideNavigation(language)}`,slideScript,language,path.basename(input));
  if(mode==='flow'){svg=flow(sections(tokens));html=wrap(title,mode,`<main id="viewport"><div id="graph">${svg}</div></main><nav><span>${text.pan}</span><button id="fit">${text.fit}</button></nav>`,flowScript,language);}
  await fs.mkdir(path.dirname(output),{recursive:true});
  if(format==='html'||format==='svg')await fs.writeFile(output,format==='svg'?svg:html);
@@ -38,7 +38,7 @@ export async function render(input,{mode='document',format='html',output,languag
 }
 async function main(){
  const values=await resolveOptions(process.argv.slice(2));
- if(values.help){console.log('用法：node src/cli.js [input.md] [--config 配置.json] [--mode document|slides|flow] [--format html|pdf|svg|png] [-o 文件] [--language zh-CN|en] [--preview|--no-preview]\n优先级：命令行参数 > JSON 配置 > 默认值；-c 为 --config 的简写。');return;}
+ if(values.help){console.log('用法：node src/cli.js [input.md] [--config 配置.json] [--mode document|slides|flow] [--format html|pdf|svg|png] [-o 文件] [--language zh-CN|en] [--preview|--no-preview] [--logo 图片路径] [--logo-scale 倍率] [--logo-position 位置]\n优先级：命令行参数 > JSON 配置 > 默认值；-c 为 --config 的简写。');return;}
  const output=await render(values.input,values);console.log(output);
  if(values.preview){const browser=await chromium.launch({headless:false,...(process.env.MYMD_BROWSER?{executablePath:process.env.MYMD_BROWSER}:process.platform==='win32'?{channel:'msedge'}:{})});const page=await browser.newPage();await page.goto(pathToFileURL(output).href);console.log('关闭预览浏览器即可退出。');}
 }

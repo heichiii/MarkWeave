@@ -40,6 +40,18 @@ test('无配置保持默认行为，格式从最终输出路径推断，显式�
  assert.deepEqual(await resolveOptions(['--help','-c','missing.json']),{help:true});
 });
 
+test('Logo 配置支持相对路径和逐项命令行覆盖，拒绝无效选项',async t=>{
+ const {dir,file,write}=await fixture(t);
+ await write({input:'source.md',logo:{path:'brand.svg',scale:1.5,position:'bottom-left'}});
+ assert.deepEqual((await resolveOptions(['-c',file])).logo,{path:path.join(dir,'brand.svg'),scale:1.5,position:'bottom-left'});
+ assert.deepEqual((await resolveOptions(['-c',file,'--logo-scale','2'])).logo,{path:path.join(dir,'brand.svg'),scale:2,position:'bottom-left'});
+ assert.deepEqual((await resolveOptions(['-c',file,'--logo','new.png','--logo-position','top-left'],dir)).logo,{path:path.join(dir,'new.png'),scale:1.5,position:'top-left'});
+ for(const logo of [null,[],{}, {path:'x',scale:0},{path:'x',scale:4},{path:'x',scale:'1'},{path:'x',position:'center'},{path:'x',unknown:1}]) {
+  await write({input:'source.md',logo});await assert.rejects(resolveOptions(['-c',file]),/logo|Logo/);
+ }
+ await assert.rejects(resolveOptions(['source.md','--logo','x.png','--logo-scale','NaN']),/logo.scale/);
+});
+
 test('无效配置、缺少输入与冲突参数给出错误',async t=>{
  const {file,write}=await fixture(t);
  for(const [value,message] of [[null,/JSON 对象/],[[],/JSON 对象/],[{unknown:true},/未知配置/],[{preview:'false'},/布尔值/],[{input:''},/非空字符串/],[{},/设置 input/]]) {

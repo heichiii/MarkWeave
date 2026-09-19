@@ -4,5 +4,10 @@
   "format": "html",
   "output": "../output/slides.config.html",
   "language": "zh-CN",
-  "preview": false
+  "preview": false,
+  "logo": {
+    "path": "assets/logo.svg",
+    "scale": 1,
+    "position": "top-right"
+  }
 }

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import markedKatex from 'marked-katex-extension';
+import {slideLogo} from './logo.js';
 
 const require=createRequire(import.meta.url);
 let mathStyles;
@@ -59,8 +60,9 @@ export function sections(tokens) {
 }
 const css=`*{box-sizing:border-box}body{margin:0;background:#eef2f6;color:#192b3c;font:16px/1.7 "Segoe UI","Microsoft YaHei",sans-serif}main{background:white;max-width:900px;margin:40px auto;padding:48px 64px;border-radius:12px}h1,h2,h3,h4{line-height:1.25;color:#123a50}h1{font-size:36px}h2{font-size:28px;border-bottom:1px solid #dce6ed;padding-bottom:12px}h3{font-size:22px}a{color:#087f8c}img{max-width:100%;max-height:380px;object-fit:contain}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf3f6;padding:18px;border-radius:8px;font-size:.85em}code{font-family:Consolas,monospace}blockquote{border-left:4px solid #12a395;margin:20px 0;padding:8px 20px;background:#effaf7}table{border-collapse:collapse;width:100%}td,th{border:1px solid #d6e1e8;padding:8px 12px;text-align:left}th{background:#edf5f7}p,li{overflow-wrap:anywhere}.hljs-keyword,.hljs-selector-tag{color:#a626a4}.hljs-string{color:#287b45}.hljs-number,.hljs-literal{color:#b45b15}.hljs-comment{color:#718096}nav{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:10;background:#18394d;color:white;padding:8px 16px;border-radius:24px;display:flex;align-items:center;gap:12px}button{border:0;border-radius:16px;padding:7px 12px;cursor:pointer}body.slides main{max-width:none;padding:0;background:none;margin:0}.slide{width:1280px;height:720px;padding:48px 64px;background:white;position:relative;margin:24px auto;overflow:hidden}.slide .content{height:558px;overflow:hidden;font-size:24px;line-height:1.5}.slide h1{font-size:42px;margin:0 0 24px}.slide h2{font-size:32px}.slide footer{position:absolute;bottom:22px;left:64px;color:#6c8496;font-size:14px}.slide.cover{border-top:12px solid #0b968a}.slide.cover h1{font-size:56px}.slide img{max-height:380px}.slide p{margin:12px 0}.slide pre{font-size:18px}.slide table{font-size:20px}body.present{overflow:hidden;background:#142c3d}body.present .slide{display:none;margin:0;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(var(--scale,1))}body.present .slide.active{display:block}body.flow main{max-width:none;margin:0;padding:0;background:#f4f7fb;border-radius:0}#viewport{height:100vh;overflow:hidden;touch-action:none;cursor:grab}#graph{transform-origin:0 0}svg text{font-family:"Microsoft YaHei","Segoe UI",sans-serif}@media print{body{background:white}nav{display:none}main{margin:0;padding:0;max-width:none}.slide{margin:0!important;break-after:page;display:block!important;position:relative!important;transform:none!important;left:auto!important;top:auto!important}body.present{overflow:visible}pre,blockquote,tr,img{break-inside:avoid}h1,h2,h3{break-after:avoid}}`;
 export function wrap(title,mode,body,script='',language='zh-CN',filename=title) { messages(language);return `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${css}${mode==='slides'?mathCss()+'.katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden}.katex{overflow-wrap:normal}':''}</style></head><body class="${mode}" data-filename="${esc(filename)}">${body}<script>${script}</script></body></html>`; }
-export function slides(tokens,md,language='zh-CN') {
+export function slides(tokens,md,language='zh-CN',logo) {
   const text=messages(language);
+  const branding=slideLogo(logo);
   const pages=[]; let page;
   for(const t of tokens) {
     if(t.type==='def')continue;
@@ -73,7 +75,7 @@ export function slides(tokens,md,language='zh-CN') {
     page.body.push(t);
   }
   if(!pages.length) pages.push({title:text.empty,body:[]});
-  return pages.map(p=>`<section class="slide"><h1>${md.parseInline(p.title)}</h1><div class="content">${md.parser(Object.assign(p.body,{links:tokens.links}))}</div><footer></footer></section>`).join('');
+  return pages.map(p=>`<section class="slide"${branding.style?` style="${branding.style}"`:''}>${branding.html}<h1>${md.parseInline(p.title)}</h1><div class="content">${md.parser(Object.assign(p.body,{links:tokens.links}))}</div><footer style="left:var(--footer-left,64px)"></footer></section>`).join('');
 }
 export const slideScript=`
 function split(el){
@@ -88,8 +90,9 @@ window.ready=(async()=>{
  for(const original of [...document.querySelectorAll('.slide')]){
  let page=original,box=page.querySelector('.content');const queue=[...box.children];box.replaceChildren();let continued=0;
  const next=()=>{const n=original.cloneNode(true);n.classList.remove('cover');n.querySelector('h1').append(' · '+document.querySelector('nav').dataset.continued+' '+(++continued));n.querySelector('.content').replaceChildren();page.after(n);page=n;box=n.querySelector('.content');};
- box.style.height=Math.max(80,640-box.offsetTop)+'px';
- while(queue.length){const el=queue.shift();box.append(el);if(box.scrollHeight>box.clientHeight+1){el.remove();if(box.children.length){const carry=[];while(box.lastElementChild && /^H[1-6]$/.test(box.lastElementChild.tagName)){carry.unshift(box.lastElementChild);box.lastElementChild.remove();}if(!box.children.length && carry.length){box.append(...carry);const tail=split(el);if(tail){queue.unshift(el,tail);continue;}}next();box.style.height=Math.max(80,640-box.offsetTop)+'px';queue.unshift(...carry,el);}else{const tail=split(el);if(tail){queue.unshift(el,tail);}else{box.append(el);el.style.maxHeight=box.clientHeight+'px';el.style.maxWidth='100%';if(box.scrollHeight>box.clientHeight+1)throw Error(document.querySelector('nav').dataset.overflow);}}}}
+ const resizeBox=()=>{box.style.height=Math.max(80,(parseFloat(getComputedStyle(page).getPropertyValue('--content-bottom'))||640)-box.offsetTop)+'px';};
+ resizeBox();
+ while(queue.length){const el=queue.shift();box.append(el);if(box.scrollHeight>box.clientHeight+1){el.remove();if(box.children.length){const carry=[];while(box.lastElementChild && /^H[1-6]$/.test(box.lastElementChild.tagName)){carry.unshift(box.lastElementChild);box.lastElementChild.remove();}if(!box.children.length && carry.length){box.append(...carry);const tail=split(el);if(tail){queue.unshift(el,tail);continue;}}next();resizeBox();queue.unshift(...carry,el);}else{const tail=split(el);if(tail){queue.unshift(el,tail);}else{box.append(el);el.style.maxHeight=box.clientHeight+'px';el.style.maxWidth='100%';if(box.scrollHeight>box.clientHeight+1)throw Error(document.querySelector('nav').dataset.overflow);}}}}
  }
  const pages=[...document.querySelectorAll('.slide')];pages.forEach((p,i)=>p.querySelector('footer').textContent=document.body.dataset.filename+' / '+(i+1)+' / '+pages.length);
  let index=0;function show(d=0){index=Math.max(0,Math.min(pages.length-1,index+d));pages.forEach((p,i)=>p.classList.toggle('active',i===index));document.documentElement.style.setProperty('--scale',Math.min(innerWidth/1280,innerHeight/720));document.getElementById('count').textContent=(index+1)+' / '+pages.length;}
