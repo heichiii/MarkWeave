@@ -72,7 +72,7 @@ test('真实 CLI 使用配置渲染，并允许命令行覆盖模式、语言、
  await run(process.execPath,['src/cli.js','--config',file,'--no-preview']);
  const configured=await fs.readFile(path.join(dir,'configured.html'),'utf8');
  assert.match(configured,/<html lang="en">/);assert.match(configured,/<body class="slides"/);
- assert.equal((configured.match(/<section class="slide">/g)||[]).length,2);
+ assert.equal((configured.match(/<section class="slide"/g)||[]).length,3);
  const output=path.join(dir,'override.html');
  await run(process.execPath,['src/cli.js','-c',file,'--mode','document','--language','zh-CN','-o',output,'--no-preview']);
  const overridden=await fs.readFile(output,'utf8');

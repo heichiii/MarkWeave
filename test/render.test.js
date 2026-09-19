@@ -7,13 +7,13 @@ test('幻灯片只按星号分隔线分页，标题与代码不触发分页',()=
  const md=parser('.');
  const source='***\n\n# 第一页\n\n## 页内标题\n\n# 另一个一级标题\n\n```md\n***\n```\n\n---\n\n___\n\n***\n\n***\n\n## 第二页\n\n[链接][ref]\n\n* * *\n\n正文页\n\n***\n\n[ref]: https://example.com\n';
  const html=slides(md.lexer(source),md);
- assert.equal((html.match(/<section /g)||[]).length,3);
- const pages=html.split('</section>');
- assert.match(pages[0],/<h2>页内标题<\/h2>/);
- assert.match(pages[0],/<h1>另一个一级标题<\/h1>/);
+ assert.equal((html.match(/<section /g)||[]).length,4);
+ const pages=html.split('</section>').filter(p=>!p.includes('data-toc='));
+ assert.match(pages[0],/<h2[^>]*>页内标题<\/h2>/);
+ assert.match(pages[0],/<h1[^>]*>另一个一级标题<\/h1>/);
  assert.match(pages[0],/<pre><code>\*\*\*/);
  assert.equal((pages[0].match(/<hr>/g)||[]).length,2);
- assert.match(pages[1],/<h1>第二页<\/h1>/);
+ assert.match(pages[1],/<h1[^>]*>第二页<\/h1>/);
  assert.match(pages[1],/href="https:\/\/example.com"/);
  assert.match(pages[2],/正文页/);
  assert.match(slides(md.lexer('***\n\n***'),md,'en'),/<h1>Empty document<\/h1>/);
@@ -44,10 +44,10 @@ test('公式离线渲染、分页保持完整，中英文提示和文件名页�
    assert.equal(await page.locator('#full').textContent(),language==='en'?'Fullscreen':'全屏');
    assert.equal(await page.locator('#present').textContent(),language==='en'?'Present / Overview':'演示 / 总览');
    const count=await page.locator('.slide').count();assert.ok(count>1);
-   assert.match(await page.locator('.slide').nth(1).locator('h1').textContent(),language==='en'?/Continued 1/:/续页 1/);
+   assert.match(await page.locator('.slide').nth(2).locator('h1').textContent(),language==='en'?/Continued 1/:/续页 1/);
    assert.equal(await page.locator('.content .katex-display').count(),12);
    assert.equal(await page.locator('.content .katex-display .katex-html').count(),12);
-   assert.equal(await page.locator('.slide h1 .katex').count(),count);
+   assert.equal(await page.locator('.slide h1 .katex').count(),count-1);
    assert.equal(await page.locator('code .katex').count(),0);
    assert.match(await page.locator('pre code').textContent(),/\$literal\$/);
    assert.equal(await page.locator('.katex-error').count(),1);
@@ -65,9 +65,9 @@ test('长段落、列表、代码跨页无丢失，无垂直溢出；演示可�
  const md=parser('.'),source='# 压力测试\n\n## 长页\n\n'+'完整保留长段落内容。'.repeat(350)+'\n\n'+Array.from({length:45},(_,i)=>'- 验收条目 '+i).join('\n')+'\n\n```js\n'+Array.from({length:70},(_,i)=>'const value'+i+' = '+i+';').join('\n')+'\n```';
  const tokens=md.lexer(source),body=slides(tokens,md),browser=await browserLaunch();
  try{const page=await browser.newPage({viewport:{width:1280,height:900}});await page.setContent(wrap('test','slides',`<main>${body}</main>${slideNav}`,slideScript));await page.evaluate(()=>window.ready);
- const result=await page.evaluate(()=>({count:document.querySelectorAll('.slide').length,overflow:[...document.querySelectorAll('.content')].some(e=>e.scrollHeight>e.clientHeight+1),text:[...document.querySelectorAll('.content')].map(e=>e.textContent).join('')}));
+ const result=await page.evaluate(()=>({count:document.querySelectorAll('.slide').length,overflow:[...document.querySelectorAll('.content')].some(e=>e.scrollHeight>e.clientHeight+1),text:[...document.querySelectorAll('.slide:not([data-toc]) .content')].map(e=>e.textContent).join('')}));
  assert.ok(result.count>5);assert.equal(result.overflow,false);
- const reference=await browser.newPage();await reference.setContent(`<main>${body}</main>`);const expected=await reference.locator('.content').allTextContents();assert.equal(result.text.replace(/\s/g,''),expected.join('').replace(/\s/g,''));
+ const reference=await browser.newPage();await reference.setContent(`<main>${body}</main>`);const expected=await reference.locator('.slide:not([data-toc]) .content').allTextContents();assert.equal(result.text.replace(/\s/g,''),expected.join('').replace(/\s/g,''));
  await page.click('#present');await page.keyboard.press('ArrowRight');assert.equal(await page.locator('.slide.active footer').textContent(),`test / 2 / ${result.count}`);
  }finally{await browser.close();}
 });
