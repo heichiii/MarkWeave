@@ -32,6 +32,42 @@ node src/cli.js examples/slides.md --mode slides --language en --preview
 
 可选 `npm link` 安装命令后使用 `mymd input.md --mode slides`。也可使用 `npm run mymd -- input.md --mode slides`。
 
+## 配置文件
+
+通过 `--config 文件.json`（简写 `-c`）加载 JSON 配置。所有字段均可省略；输入文件必须由配置中的 `input` 或命令行位置参数提供。例如：
+
+```json
+{
+  "input": "slides.md",
+  "mode": "slides",
+  "format": "html",
+  "output": "../output/slides.config.html",
+  "language": "zh-CN",
+  "preview": false
+}
+```
+
+可直接使用 `examples/slides.config.json`：
+
+```sh
+node src/cli.js --config examples/slides.config.json
+node src/cli.js input/presentation.md -c examples/slides.config.json --language en -o output/presentation.slides.html
+node src/cli.js -c examples/slides.config.json --format pdf -o output/slides.pdf --no-preview
+```
+
+优先级为 **显式命令行参数 > 配置文件 > 默认值**，逐项覆盖。命令行的输入文件覆盖 `input`；`--preview` 开启预览，`--no-preview` 可覆盖配置中的 `"preview": true`，两者不能同时使用。
+
+| 字段 | 类型 / 可选值 | 默认行为 |
+| --- | --- | --- |
+| `input` | 非空字符串 | 必须在配置或命令行中提供 |
+| `mode` | `document` / `slides` / `flow` | `document` |
+| `format` | `html` / `pdf` / `svg` / `png`，须符合模式支持的格式 | 从最终 `output` 扩展名推断；没有输出路径时为 `html` |
+| `output` | 非空字符串 | 当前目录下的 `output/输入名.模式.格式` |
+| `language` | `zh-CN` / `en` | `zh-CN` |
+| `preview` | JSON 布尔值 | `false` |
+
+配置中 `input` 和 `output` 的相对路径以配置文件所在目录为基准，命令行中的相对路径以当前工作目录为基准。显式设置的 `format`（包括配置中的值）优先于输出扩展名推断；修改导出类型时建议同时指定 `--format` 和 `-o`。配置文件必须是 JSON 对象，不支持注释，未知字段和错误的字段类型会报错。
+
 ## 渲染规则
 
 | 模式 | 默认行为 | 导出 |
@@ -79,6 +115,7 @@ npm test
 
 - `src/render.js`：Markdown 解析、标题树、三种输出模板与浏览器交互。
 - `src/cli.js`：参数解析、资源读取、浏览器导出及预览入口。
+- `src/config.js`：JSON 配置读取、命令行覆盖与路径解析。
 - `src/flow.js`：pstree 风格的子树尺寸计算、节点定位与 SVG 连线。
 - `scripts/examples.js`：生成全部示例产物。
 - `test/render.test.js`：结构与浏览器集成测试。

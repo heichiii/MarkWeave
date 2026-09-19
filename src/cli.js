@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {parseArgs} from 'node:util';
+import {resolveOptions} from './config.js';
 import {chromium} from 'playwright';
 import {parser,sections,wrap,slides,flow,slideScript,slideNavigation,flowScript,messages} from './render.js';
 
@@ -37,11 +37,9 @@ export async function render(input,{mode='document',format='html',output,languag
  return output;
 }
 async function main(){
- const {values,positionals}=parseArgs({allowPositionals:true,options:{mode:{type:'string',default:'document'},format:{type:'string'},output:{type:'string',short:'o'},language:{type:'string',default:'zh-CN'},preview:{type:'boolean'},help:{type:'boolean',short:'h'}}});
- if(values.help||!positionals.length){console.log('用法：node src/cli.js input.md --mode document|slides|flow [--format html|pdf|svg|png] [-o 文件] [--language zh-CN|en] [--preview]');return;}
- if(positionals.length!==1)throw Error('每次输入一个 Markdown 文件');
- const format=values.format||(values.output?path.extname(values.output).slice(1):'html');
- const output=await render(positionals[0],{mode:values.mode,format,output:values.output,language:values.language});console.log(output);
+ const values=await resolveOptions(process.argv.slice(2));
+ if(values.help){console.log('用法：node src/cli.js [input.md] [--config 配置.json] [--mode document|slides|flow] [--format html|pdf|svg|png] [-o 文件] [--language zh-CN|en] [--preview|--no-preview]\n优先级：命令行参数 > JSON 配置 > 默认值；-c 为 --config 的简写。');return;}
+ const output=await render(values.input,values);console.log(output);
  if(values.preview){const browser=await chromium.launch({headless:false,...(process.env.MYMD_BROWSER?{executablePath:process.env.MYMD_BROWSER}:process.platform==='win32'?{channel:'msedge'}:{})});const page=await browser.newPage();await page.goto(pathToFileURL(output).href);console.log('关闭预览浏览器即可退出。');}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href)main().catch(e=>{console.error('mymd:',e.message);process.exitCode=1;});

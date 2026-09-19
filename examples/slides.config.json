@@ -1,0 +1,8 @@
+{
+  "input": "slides.md",
+  "mode": "slides",
+  "format": "html",
+  "output": "../output/slides.config.html",
+  "language": "zh-CN",
+  "preview": false
+}
