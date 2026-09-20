@@ -18,20 +18,23 @@ test('Typora HTML 图片嵌入、保留缩放，其他 HTML 和代码仍作为�
   assert.equal(await imgs.nth(1).evaluate(i=>i.getBoundingClientRect().width),80);
  }finally{await browser.close();}
 });
-test('幻灯片只按星号分隔线分页，标题与代码不触发分页',()=>{
+test('幻灯片按星号、短横线和下划线分隔线分页，标题与代码不触发分页',()=>{
  const md=parser('.');
- const source='***\n\n# 第一页\n\n## 页内标题\n\n# 另一个一级标题\n\n```md\n***\n```\n\n---\n\n___\n\n***\n\n***\n\n## 第二页\n\n[链接][ref]\n\n* * *\n\n正文页\n\n***\n\n[ref]: https://example.com\n';
+ const source='***\n\n# 第一页\n\n## 页内标题\n\n# 另一个一级标题\n\n```md\n***\n---\n___\n```\n\n---\n\n## 第二页\n\n[链接][ref]\n\n___\n\n正文第三页\n\n* * *\n\n正文第四页\n\n- - -\n\n正文第五页\n\n_ _ _\n\n正文第六页\n\n***\n\n[ref]: https://example.com\n';
  const html=slides(md.lexer(source),md);
- assert.equal((html.match(/<section /g)||[]).length,4);
+ assert.equal((html.match(/<section /g)||[]).length,7);
  const pages=html.split('</section>').filter(p=>!p.includes('data-toc='));
  assert.match(pages[0],/<h2[^>]*>页内标题<\/h2>/);
  assert.match(pages[0],/<h1[^>]*>另一个一级标题<\/h1>/);
- assert.match(pages[0],/<pre><code>\*\*\*/);
- assert.equal((pages[0].match(/<hr>/g)||[]).length,2);
+ assert.match(pages[0],/<pre><code>\*\*\*\n---\n___/);
+ assert.equal((html.match(/<hr>/g)||[]).length,0);
  assert.match(pages[1],/<h2[^>]*>第二页<\/h2>/);
  assert.match(pages[1],/href="https:\/\/example.com"/);
- assert.match(pages[2],/正文页/);
- assert.match(slides(md.lexer('***\n\n***'),md,'en'),/<p>Empty document<\/p>/);
+ assert.match(pages[2],/正文第三页/);
+ assert.match(pages[3],/正文第四页/);
+ assert.match(pages[4],/正文第五页/);
+ assert.match(pages[5],/正文第六页/);
+ assert.match(slides(md.lexer('***\n\n---\n\n___'),md,'en'),/<p>Empty document<\/p>/);
 });
 test('标题解析保留跳级、前言，忽略代码块里的伪标题',()=>{
  const md=parser('.'),root=sections(md.lexer('前言\n\n# 根\n\n```md\n## 不是标题\n```\n\n### 子\n\n## 同级父节点\n'));

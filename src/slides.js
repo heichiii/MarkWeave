@@ -11,7 +11,7 @@ function length(value,negative=true) {
 export function slidePages(tokens) {
  const groups=[[]];
  for(const token of tokens) {
-  if(token.type==='hr' && /^(?:\*\s*){3,}$/.test(token.raw.trim()))groups.push([]);
+  if(token.type==='hr')groups.push([]);
   else if(!['space','def'].includes(token.type))groups.at(-1).push(token);
  }
  let hasCover=false,chapter=0,section=0,chapterTitle='',sectionTitle='';
