@@ -164,7 +164,7 @@ node src/cli.js input/presentation.md --mode slides --logo examples/assets/logo.
 
 slides 模式支持 KaTeX 数学公式：`$E=mc^2$` 为行内公式，独占行的 `$$` 包围多行公式；也支持 `$$E=mc^2$$`。代码块、行内代码和转义的美元符号保留原样。公式样式和字体嵌入 HTML，离线预览与 PDF 导出均可使用；分页时不拆开公式内部结构。
 
-document 和 slides 模式支持 Mermaid。使用 `mermaid` 围栏代码块编写流程图、时序图等，输出 HTML 会内嵌 Mermaid 运行时并生成 SVG，不依赖 CDN；PDF 导出会等待图形渲染完成，幻灯片分页不会拆开图形。flow 模式仍用于展示文档自身的标题层级。
+document 和 slides 模式支持 Mermaid。使用 `mermaid` 围栏代码块编写流程图、时序图、XY 折线图等，输出 HTML 会内嵌 Mermaid 运行时并生成 SVG，不依赖 CDN；PDF 导出会等待图形渲染完成，幻灯片分页不会拆开图形。默认主题针对白色背景使用深青、蓝、橙等高对比配色；单个图可以通过 Mermaid frontmatter 的 `config.themeVariables` 覆盖。flow 模式仍用于展示文档自身的标题层级。
 
 ```markdown
 ## 公式示例

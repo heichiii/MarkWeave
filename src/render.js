@@ -24,7 +24,7 @@ function mathCss() {
 function mermaidScript(body) {
   if(!body.includes('class="mermaid"'))return '';
   if(!mermaidRuntime)mermaidRuntime=fs.readFileSync(require.resolve('mermaid/dist/mermaid.min.js'),'utf8').replace(/<\/script/gi,'<\\/script');
-  return `${mermaidRuntime}\nmermaid.initialize({startOnLoad:false,securityLevel:'strict'});window.mermaidReady=mermaid.run({querySelector:'.mermaid'});window.ready=window.mermaidReady;`;
+  return `${mermaidRuntime}\nmermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'base',themeVariables:{background:'#ffffff',primaryColor:'#e6f4f1',primaryTextColor:'#173c51',primaryBorderColor:'#367585',lineColor:'#426779',textColor:'#173c51',xyChart:{backgroundColor:'#ffffff',titleColor:'#173c51',dataLabelColor:'#173c51',legendTextColor:'#173c51',xAxisLabelColor:'#36566a',xAxisTitleColor:'#173c51',xAxisTickColor:'#6c8496',xAxisLineColor:'#426779',yAxisLabelColor:'#36566a',yAxisTitleColor:'#173c51',yAxisTickColor:'#6c8496',yAxisLineColor:'#426779',plotColorPalette:'#087f8c, #2563eb, #d97706, #7c3aed, #c2410c, #0f766e'}}});window.mermaidReady=mermaid.run({querySelector:'.mermaid'});window.ready=window.mermaidReady;`;
 }
 export function messages(language='zh-CN') {
   const locales={

@@ -36,8 +36,8 @@ test('幻灯片按星号、短横线和下划线分隔线分页，标题与代�
  assert.match(pages[5],/正文第六页/);
  assert.match(slides(md.lexer('***\n\n---\n\n___'),md,'en'),/<p>Empty document<\/p>/);
 });
-test('Mermaid 在文档和幻灯片中离线渲染为 SVG',async()=>{
- const source='# Mermaid\n\n```mermaid\nflowchart LR\n  A[开始] --> B{判断}\n  B -->|是| C[完成]\n```';
+test('Mermaid 在文档和幻灯片中离线渲染为高对比 SVG',async()=>{
+ const source='# Mermaid\n\n```mermaid\nflowchart LR\n  A[开始] --> B{判断}\n  B -->|是| C[完成]\n```\n\n```mermaid\nxychart\n  title "Trend"\n  x-axis [Jan, Feb, Mar]\n  y-axis "Value" 0 --> 30\n  line [8, 18, 25]\n```';
  const md=parser('.'),tokens=md.lexer(source);
  const bodies=[md.parser(tokens),slides(tokens,md)];
  const browser=await browserLaunch();
@@ -46,8 +46,9 @@ test('Mermaid 在文档和幻灯片中离线渲染为 SVG',async()=>{
    const html=wrap('mermaid',i?'slides':'document',i?`<main>${body}</main>${slideNav}`:`<main>${body}</main>`,i?slideScript:'');
    const page=await browser.newPage();const requests=[];page.on('request',request=>{if(/^https?:/.test(request.url()))requests.push(request.url());});
    await page.setContent(html);await page.evaluate(()=>window.ready);
-   assert.equal(await page.locator('.mermaid svg').count(),1);
-   assert.match(await page.locator('.mermaid').textContent(),/开始/);
+   assert.equal(await page.locator('.mermaid svg').count(),2);
+   assert.match(await page.locator('.mermaid').first().textContent(),/开始/);
+   assert.equal(await page.locator('.mermaid svg').nth(1).evaluate(svg=>[...svg.querySelectorAll('path')].some(path=>getComputedStyle(path).stroke==='rgb(8, 127, 140)')),true);
    assert.deepEqual(requests,[]);
    if(i)assert.equal(await page.evaluate(()=>[...document.querySelectorAll('.content')].some(el=>el.scrollHeight>el.clientHeight+1)),false);
    await page.close();
