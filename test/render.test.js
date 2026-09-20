@@ -18,6 +18,23 @@ test('Typora HTML 图片嵌入、保留缩放，其他 HTML 和代码仍作为�
   assert.equal(await imgs.nth(1).evaluate(i=>i.getBoundingClientRect().width),80);
  }finally{await browser.close();}
 });
+test('Typora zoom 对受页面上限约束的大图仍然生效',async()=>{
+ const md=parser('examples');
+ const image='data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221400%22%20height%3D%22800%22%3E%3C%2Fsvg%3E';
+ const source=`# Default\n\n<img src="${image}">\n\n***\n\n# Half\n\n<img src="${image}" style="zoom:50%">\n\n***\n\n# Double\n\n<img src="${image}" style="zoom:200%">`;
+ const html=wrap('zoom','slides',`<main>${slides(md.lexer(source),md)}</main>${slideNav}`,slideScript);
+ assert.doesNotMatch(html,/zoom:0\.5;max-/);
+ const browser=await browserLaunch();
+ try {
+  const page=await browser.newPage();await page.setContent(html);await page.evaluate(()=>window.ready);
+  const widths=await page.locator('.content img').evaluateAll(images=>images.map(image=>image.getBoundingClientRect().width));
+  assert.equal(widths.length,3);
+  assert.ok(Math.abs(widths[1]-widths[0]*.5)<1,'zoom:50% 应将大图缩小一半');
+  assert.ok(widths[2]>widths[0],'zoom:200% 应放大大图');
+  assert.ok(widths[2]<=1152,'放大后的图片仍应限制在幻灯片正文宽度内');
+  assert.ok(await page.locator('.content').evaluateAll(boxes=>boxes.every(box=>box.scrollHeight<=box.closest('.body-region').clientHeight+1)),'放大后的图片不应阻断幻灯片初始化');
+ }finally{await browser.close();}
+});
 test('幻灯片按星号、短横线和下划线分隔线分页，标题与代码不触发分页',()=>{
  const md=parser('.');
  const source='***\n\n# 第一页\n\n## 页内标题\n\n# 另一个一级标题\n\n```md\n***\n---\n___\n```\n\n---\n\n## 第二页\n\n[链接][ref]\n\n___\n\n正文第三页\n\n* * *\n\n正文第四页\n\n- - -\n\n正文第五页\n\n_ _ _\n\n正文第六页\n\n***\n\n[ref]: https://example.com\n';

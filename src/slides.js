@@ -144,7 +144,11 @@ function initializeSlides() {
      if(tail)queue.unshift(el,tail);
      else {
       box.append(el);
-      if(el.nodeType===1 && el.tagName==='IMG'){el.style.maxHeight=region.clientHeight/(parseFloat(getComputedStyle(el).zoom)||1)+'px';el.style.maxWidth='100%';}
+       if(el.nodeType===1 && el.tagName==='IMG'){
+        el.style.display='block';
+        el.style.maxHeight=region.clientHeight/(parseFloat(getComputedStyle(el).zoom)||1)+'px';
+        el.style.maxWidth='100%';
+       }
       if(box.scrollHeight>region.clientHeight+1)throw Error(en?'Unsplittable content exceeds the slide':'不可拆分内容超出页面');
      }
     }

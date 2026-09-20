@@ -65,7 +65,7 @@ export function parser(dir,{math=false}={}) {
       if(['width','height'].includes(key) && /^(?:\d+(?:\.\d+)?(?:px|%)|auto)$/.test(value||''))styles.push(`${key}:${value}`);
       if(key==='zoom' && /^\d+(?:\.\d+)?%?$/.test(value||'')) {
         const scale=parseFloat(value)/(value.endsWith('%')?100:1);
-        if(scale>0 && Number.isFinite(scale))styles.push(`zoom:${scale}`,`max-height:${380/scale}px`,`max-width:${100/scale}%`);
+        if(scale>0 && Number.isFinite(scale))styles.push(`zoom:${scale}`);
       }
     }
     return imageTag(attrs.src,attrs.alt,styles.join(';'));
