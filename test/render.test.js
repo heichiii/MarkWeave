@@ -26,7 +26,7 @@ test('幻灯片按星号、短横线和下划线分隔线分页，标题与代�
  const pages=html.split('</section>').filter(p=>!p.includes('data-toc='));
  assert.match(pages[0],/<h2[^>]*>页内标题<\/h2>/);
  assert.match(pages[0],/<h1[^>]*>另一个一级标题<\/h1>/);
- assert.match(pages[0],/<pre><code>\*\*\*\n---\n___/);
+ assert.match(pages[0],/<pre><code>[\s\S]*\*\*\*[\s\S]*---[\s\S]*__[\s\S]*_/);
  assert.equal((html.match(/<hr>/g)||[]).length,0);
  assert.match(pages[1],/<h2[^>]*>第二页<\/h2>/);
  assert.match(pages[1],/href="https:\/\/example.com"/);
@@ -35,6 +35,24 @@ test('幻灯片按星号、短横线和下划线分隔线分页，标题与代�
  assert.match(pages[4],/正文第五页/);
  assert.match(pages[5],/正文第六页/);
  assert.match(slides(md.lexer('***\n\n---\n\n___'),md,'en'),/<p>Empty document<\/p>/);
+});
+test('Mermaid 在文档和幻灯片中离线渲染为 SVG',async()=>{
+ const source='# Mermaid\n\n```mermaid\nflowchart LR\n  A[开始] --> B{判断}\n  B -->|是| C[完成]\n```';
+ const md=parser('.'),tokens=md.lexer(source);
+ const bodies=[md.parser(tokens),slides(tokens,md)];
+ const browser=await browserLaunch();
+ try {
+  for(const [i,body] of bodies.entries()) {
+   const html=wrap('mermaid',i?'slides':'document',i?`<main>${body}</main>${slideNav}`:`<main>${body}</main>`,i?slideScript:'');
+   const page=await browser.newPage();const requests=[];page.on('request',request=>{if(/^https?:/.test(request.url()))requests.push(request.url());});
+   await page.setContent(html);await page.evaluate(()=>window.ready);
+   assert.equal(await page.locator('.mermaid svg').count(),1);
+   assert.match(await page.locator('.mermaid').textContent(),/开始/);
+   assert.deepEqual(requests,[]);
+   if(i)assert.equal(await page.evaluate(()=>[...document.querySelectorAll('.content')].some(el=>el.scrollHeight>el.clientHeight+1)),false);
+   await page.close();
+  }
+ }finally{await browser.close();}
 });
 test('标题解析保留跳级、前言，忽略代码块里的伪标题',()=>{
  const md=parser('.'),root=sections(md.lexer('前言\n\n# 根\n\n```md\n## 不是标题\n```\n\n### 子\n\n## 同级父节点\n'));

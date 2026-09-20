@@ -101,15 +101,16 @@ export const slideCss=`
 function initializeSlides() {
  function split(el) {
   if(el.nodeType===3){if(el.textContent.length<2)return null;const tail=el.splitText(Math.ceil(el.textContent.length/2));tail.remove();return tail;}
-  if(el.nodeType!==1 || el.tagName==='IMG' || el.classList.contains('katex') || el.classList.contains('katex-display'))return null;
+  if(el.nodeType!==1 || ['IMG','SVG'].includes(el.tagName) || el.classList.contains('katex') || el.classList.contains('katex-display') || el.classList.contains('mermaid'))return null;
   const tail=el.cloneNode(false);
   if(el.childNodes.length>1){const n=Math.ceil(el.childNodes.length/2);while(el.childNodes.length>n)tail.prepend(el.lastChild);return tail;}
   if(el.firstChild){const part=split(el.firstChild);if(part){tail.append(part);return tail;}}
   return null;
  }
  const pixels=(value,size)=>parseFloat(value)*(value.endsWith('%')?size/100:1);
- window.ready=(async()=>{
-  await document.fonts.ready;
+  window.ready=(async()=>{
+   await window.mermaidReady;
+   await document.fonts.ready;
   await Promise.all([...document.images].map(i=>i.decode().catch(()=>{})));
   const en=document.documentElement.lang==='en';
   const continued=en?'Continued':'续页';
