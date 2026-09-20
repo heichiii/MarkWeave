@@ -3,6 +3,21 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {parser,sections,slides,wrap,slideScript,slideNav} from '../src/render.js';
 import {browserLaunch,render} from '../src/cli.js';
+test('Typora HTML 图片嵌入、保留缩放，其他 HTML 和代码仍作为文字',async()=>{
+ const md=parser('examples');
+ const source='# Image\n\n<img src="assets/logo.svg" alt="A &amp; B" style="zoom:25%;position:fixed" onerror="alert(1)" />\n\n<img src="assets/logo.svg" width="80" />\n\n<script>alert(1)</script>\n\n```html\n<img src="missing.png">\n```';
+ const html=wrap('image','slides',`<main>${slides(md.lexer(source),md)}</main>${slideNav}`,slideScript);
+ assert.doesNotMatch(html,/<img[^>]*onerror=/);
+ assert.match(html,/&lt;script&gt;/);
+ const browser=await browserLaunch();
+ try {
+  const page=await browser.newPage();await page.setContent(html);await page.evaluate(()=>window.ready);
+  const imgs=page.locator('.content img');assert.equal(await imgs.count(),2);
+  const first=await imgs.first().evaluate(i=>({width:i.getBoundingClientRect().width,height:i.getBoundingClientRect().height,alt:i.alt,loaded:i.complete&&i.naturalWidth>0,embedded:i.src.startsWith('data:image/svg+xml;base64,')}));
+  assert.deepEqual(first,{width:30,height:12,alt:'A & B',loaded:true,embedded:true});
+  assert.equal(await imgs.nth(1).evaluate(i=>i.getBoundingClientRect().width),80);
+ }finally{await browser.close();}
+});
 test('幻灯片只按星号分隔线分页，标题与代码不触发分页',()=>{
  const md=parser('.');
  const source='***\n\n# 第一页\n\n## 页内标题\n\n# 另一个一级标题\n\n```md\n***\n```\n\n---\n\n___\n\n***\n\n***\n\n## 第二页\n\n[链接][ref]\n\n* * *\n\n正文页\n\n***\n\n[ref]: https://example.com\n';
@@ -13,10 +28,10 @@ test('幻灯片只按星号分隔线分页，标题与代码不触发分页',()=
  assert.match(pages[0],/<h1[^>]*>另一个一级标题<\/h1>/);
  assert.match(pages[0],/<pre><code>\*\*\*/);
  assert.equal((pages[0].match(/<hr>/g)||[]).length,2);
- assert.match(pages[1],/<h1[^>]*>第二页<\/h1>/);
+ assert.match(pages[1],/<h2[^>]*>第二页<\/h2>/);
  assert.match(pages[1],/href="https:\/\/example.com"/);
  assert.match(pages[2],/正文页/);
- assert.match(slides(md.lexer('***\n\n***'),md,'en'),/<h1>Empty document<\/h1>/);
+ assert.match(slides(md.lexer('***\n\n***'),md,'en'),/<p>Empty document<\/p>/);
 });
 test('标题解析保留跳级、前言，忽略代码块里的伪标题',()=>{
  const md=parser('.'),root=sections(md.lexer('前言\n\n# 根\n\n```md\n## 不是标题\n```\n\n### 子\n\n## 同级父节点\n'));
@@ -44,10 +59,10 @@ test('公式离线渲染、分页保持完整，中英文提示和文件名页�
    assert.equal(await page.locator('#full').textContent(),language==='en'?'Fullscreen':'全屏');
    assert.equal(await page.locator('#present').textContent(),language==='en'?'Present / Overview':'演示 / 总览');
    const count=await page.locator('.slide').count();assert.ok(count>1);
-   assert.match(await page.locator('.slide').nth(2).locator('h1').textContent(),language==='en'?/Continued 1/:/续页 1/);
+   assert.match(await page.locator('.slide').nth(1).locator('footer').textContent(),language==='en'?/Continued 1/:/续页 1/);
    assert.equal(await page.locator('.content .katex-display').count(),12);
    assert.equal(await page.locator('.content .katex-display .katex-html').count(),12);
-   assert.equal(await page.locator('.slide h1 .katex').count(),count-1);
+   assert.equal(await page.locator('.page-title .katex').count(),1);
    assert.equal(await page.locator('code .katex').count(),0);
    assert.match(await page.locator('pre code').textContent(),/\$literal\$/);
    assert.equal(await page.locator('.katex-error').count(),1);
@@ -55,7 +70,7 @@ test('公式离线渲染、分页保持完整，中英文提示和文件名页�
    assert.equal(await page.evaluate(()=>[...document.fonts].some(font=>font.family.startsWith('KaTeX')&&font.status==='loaded')),true);
    assert.deepEqual(requests,[]);
    await page.click('#present');await page.keyboard.press('ArrowRight');
-   assert.equal(await page.locator('.slide.active footer').textContent(),`公式 & demo.md / 2 / ${count}`);
+   assert.equal(await page.locator('.slide.active footer').textContent(),`公式 & demo.md / 2 / ${count} · ${language==='en'?'Continued':'续页'} 1`);
    await page.screenshot({path:`tmp/qa/math-${language}.png`});
    await page.close();
   }
@@ -68,7 +83,7 @@ test('长段落、列表、代码跨页无丢失，无垂直溢出；演示可�
  const result=await page.evaluate(()=>({count:document.querySelectorAll('.slide').length,overflow:[...document.querySelectorAll('.content')].some(e=>e.scrollHeight>e.clientHeight+1),text:[...document.querySelectorAll('.slide:not([data-toc]) .content')].map(e=>e.textContent).join('')}));
  assert.ok(result.count>5);assert.equal(result.overflow,false);
  const reference=await browser.newPage();await reference.setContent(`<main>${body}</main>`);const expected=await reference.locator('.slide:not([data-toc]) .content').allTextContents();assert.equal(result.text.replace(/\s/g,''),expected.join('').replace(/\s/g,''));
- await page.click('#present');await page.keyboard.press('ArrowRight');assert.equal(await page.locator('.slide.active footer').textContent(),`test / 2 / ${result.count}`);
+ await page.click('#present');await page.keyboard.press('ArrowRight');assert.equal(await page.locator('.slide.active footer').textContent(),`test / 2 / ${result.count} · 续页 1`);
  }finally{await browser.close();}
 });
 test('三份样例预览无脚本错误、图片可解码并保存检查图',async()=>{

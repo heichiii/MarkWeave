@@ -19,10 +19,9 @@ export function slideLogo(logo) {
  try {data=fs.readFileSync(logo.path).toString('base64');}
  catch(error){throw new Error(`无法读取 Logo 图片 ${logo.path}：${error.message}`,{cause:error});}
  const [vertical,horizontal]=position.split('-'),width=120*scale,height=48*scale;
- const style=vertical==='top'?`padding-top:${Math.max(96,48+height)}px;--chapter-top:${24+Math.max(0,(height-32)/2)}px;--chapter-${horizontal}:${88+width}px;`:`--content-bottom:${Math.min(640,672-height)}px;`;
  const footer=position==='bottom-left'?`--footer-left:${88+width}px;`:'';
  return {
-  style:style+footer,
+  style:footer,
   html:`<img class="slide-logo" alt="Logo" src="data:${mime};base64,${data}" style="position:absolute;${vertical}:24px;${horizontal}:64px;width:${width}px;height:${height}px;max-width:none;max-height:none;object-fit:contain;object-position:${horizontal} ${vertical};">`
  };
 }

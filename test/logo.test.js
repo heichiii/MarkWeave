@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import {parser,slides,wrap,slideScript,slideNav} from '../src/render.js';
 import {browserLaunch,render} from '../src/cli.js';
 
-test('Logo 四角定位、缩放、续页和打印布局正确且不遮挡正文',async()=>{
+test('Logo 四角定位、缩放、续页和打印布局正确且正文区域固定',async()=>{
  await fs.mkdir('tmp/qa',{recursive:true});
  const md=parser('.'),tokens=md.lexer('# Logo test\n\n'+Array.from({length:30},(_,i)=>`Paragraph ${i}: Content stays visible.\n\n`).join('')+'***\n\n# Final slide\n\nEnd.');
  const browser=await browserLaunch();
@@ -17,9 +17,9 @@ test('Logo 四角定位、缩放、续页和打印布局正确且不遮挡正文
    await page.evaluate(()=>window.ready);
    await page.emulateMedia({media:'print'});
    const checks=await page.evaluate(()=>[...document.querySelectorAll('.slide')].map(slide=>{
-    const logo=slide.querySelector('.slide-logo'),r=logo.getBoundingClientRect(),s=slide.getBoundingClientRect(),body=slide.querySelector('.content'),b=body.getBoundingClientRect(),h=slide.querySelector('h1').getBoundingClientRect(),f=slide.querySelector('footer').getBoundingClientRect();
+    const logo=slide.querySelector('.slide-logo'),r=logo.getBoundingClientRect(),s=slide.getBoundingClientRect(),body=slide.querySelector('.content'),b=body.getBoundingClientRect(),f=slide.querySelector('footer').getBoundingClientRect();
     const overlap=q=>r.left<q.right&&r.right>q.left&&r.top<q.bottom&&r.bottom>q.top;
-    return {count:slide.querySelectorAll('.slide-logo').length,decoded:logo.complete&&logo.naturalWidth>0,embedded:logo.src.startsWith('data:image/svg+xml;base64,'),width:r.width,height:r.height,left:r.left-s.left,right:s.right-r.right,top:r.top-s.top,bottom:s.bottom-r.bottom,overlap:overlap(b)||overlap(h)||overlap(f),overflow:body.scrollHeight>body.clientHeight+1};
+    return {count:slide.querySelectorAll('.slide-logo').length,decoded:logo.complete&&logo.naturalWidth>0,embedded:logo.src.startsWith('data:image/svg+xml;base64,'),width:r.width,height:r.height,left:r.left-s.left,right:s.right-r.right,top:r.top-s.top,bottom:s.bottom-r.bottom,overlap:overlap(f),overflow:body.scrollHeight>slide.querySelector('.body-region').clientHeight+1};
    }));
    assert.ok(checks.length>2);
    for(const check of checks) {

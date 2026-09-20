@@ -30,6 +30,8 @@ export async function render(input,{mode='document',format='html',output,languag
    const page=await browser.newPage({viewport:{width:1280,height:900}});
    await page.setContent(format==='png'?wrap(title,'',svg):html,{waitUntil:'networkidle'});
    await page.evaluate(async()=>{await window.ready;await document.fonts.ready;await Promise.all([...document.images].map(i=>i.decode()));});
+   const warnings=await page.evaluate(()=>window.slideWarnings||[]);
+   if(warnings.length)throw Error('手动布局溢出，未导出文件：'+warnings.map(w=>`第 ${w.page} 页（Markdown 第 ${w.sourcePage} 页）：${w.message}`).join('\n'));
    if(format==='pdf')await page.pdf({path:output,printBackground:true,...(mode==='slides'?{width:'1280px',height:'720px',margin:{top:0,bottom:0,left:0,right:0}}:{format:'A4',margin:{top:'18mm',bottom:'18mm',left:'18mm',right:'18mm'}})});
    else await page.locator('svg').screenshot({path:output,timeout:60000});
   } finally {await browser.close();}

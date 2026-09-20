@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import markedKatex from 'marked-katex-extension';
-import {slideLogo} from './logo.js';
+import {slideCss} from './slides.js';
+export {slides,slideScript} from './slides.js';
 
 const require=createRequire(import.meta.url);
 let mathStyles;
@@ -30,21 +31,56 @@ export function messages(language='zh-CN') {
 
 export const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export function parser(dir,{math=false}={}) {
+  const imageTag=(href,alt='',style='')=>{
+    let url=href;
+    if (!/^(https?:|data:image\/)/i.test(url)) {
+      const file=path.resolve(dir,decodeURIComponent(url));
+      const mime={'.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp'}[path.extname(file).toLowerCase()];
+      if(!mime)throw new Error(`不支持的图片类型：${file}`);
+      url=`data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
+    }
+    return `<img src="${esc(url)}" alt="${esc(alt)}"${style?` style="${esc(style)}"`:''}>`;
+  };
+  const decode=s=>s.replace(/&(?:amp|quot|apos|lt|gt|#\d+|#x[\da-f]+);/gi,e=>{
+    const named={'&amp;':'&','&quot;':'"','&apos;':"'",'&lt;':'<','&gt;':'>'};
+    if(named[e.toLowerCase()])return named[e.toLowerCase()];
+    const n=e.toLowerCase().startsWith('&#x')?parseInt(e.slice(3),16):parseInt(e.slice(2),10);
+    return n>0&&n<=0x10ffff?String.fromCodePoint(n):e;
+  });
+  const htmlImages=raw=>raw.split(/(<img\b(?:[^>"']|"[^"]*"|'[^']*')*>)/gi).map(part=>{
+    if(!/^<img\b/i.test(part))return esc(part);
+    const attrs={};
+    for(const m of part.slice(4,-1).matchAll(/([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g))attrs[m[1].toLowerCase()]=decode(m[2]??m[3]??m[4]);
+    if(!attrs.src)return esc(part);
+    const styles=[];
+    for(const key of ['width','height'])if(/^\d+(?:\.\d+)?(?:px|%)?$/.test(attrs[key]||''))styles.push(`${key}:${/^\d+(?:\.\d+)?$/.test(attrs[key])?attrs[key]+'px':attrs[key]}`);
+    for(const declaration of (attrs.style||'').split(';')) {
+      const [key,value]=declaration.split(':').map(s=>s.trim().toLowerCase());
+      if(['width','height'].includes(key) && /^(?:\d+(?:\.\d+)?(?:px|%)|auto)$/.test(value||''))styles.push(`${key}:${value}`);
+      if(key==='zoom' && /^\d+(?:\.\d+)?%?$/.test(value||'')) {
+        const scale=parseFloat(value)/(value.endsWith('%')?100:1);
+        if(scale>0 && Number.isFinite(scale))styles.push(`zoom:${scale}`,`max-height:${380/scale}px`,`max-width:${100/scale}%`);
+      }
+    }
+    return imageTag(attrs.src,attrs.alt,styles.join(';'));
+  }).join('');
   const md=new Marked({gfm:true, renderer:{
-    html: t => esc(t.text),
+    html: t => htmlImages(t.text),
     code(t) { const lang=(t.lang||'').split(/\s/)[0]; return `<pre><code>${lang && hljs.getLanguage(lang) ? hljs.highlight(t.text,{language:lang}).value : esc(t.text)}</code></pre>`; },
     image(t) {
-      let url=t.href;
-      if (!/^(https?:|data:)/i.test(url)) {
-        const file=path.resolve(dir,decodeURIComponent(url));
-        const mime={'.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp'}[path.extname(file).toLowerCase()];
-        if(!mime) throw new Error(`不支持的图片类型：${file}`);
-        url=`data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
-      }
-      return `<img src="${esc(url)}" alt="${esc(t.text)}">`;
+      return imageTag(t.href,t.text);
     },
     link(t) { return /^(javascript|vbscript|data):/i.test(t.href.trim()) ? this.parser.parseInline(t.tokens) : `<a href="${esc(t.href)}">${this.parser.parseInline(t.tokens)}</a>`; }
   }});
+  md.use({extensions:[{
+    name:'slideDirective',level:'block',
+    start:source=>source.indexOf('<!--'),
+    tokenizer(source) {
+      const match=/^ {0,3}<!--\s*((?:slide:|gap:|\/slide\b)[^\n]*?)\s*-->[ \t]*(?:\r?\n|$)/.exec(source);
+      if(match)return {type:'slideDirective',raw:match[0],directive:match[1]};
+    },
+    renderer:()=>''
+  }]});
   if(math)md.use(markedKatex({throwOnError:false,trust:false,nonStandard:true}));
   return md;
 }
@@ -58,84 +94,8 @@ export function sections(tokens) {
   }
   return root;
 }
-const css=`.slide[data-toc] .content{padding-top:4px}.slide[data-toc] > h1{font-size:46px;margin-bottom:24px}.slide:not([data-cover]):not([data-toc]){padding-top:96px}.chapter-label{position:absolute;top:var(--chapter-top,32px);left:var(--chapter-left,64px);right:var(--chapter-right,64px);font-size:22px;line-height:32px;font-weight:600;color:#367585;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.toc-entry{display:flex;align-items:baseline;gap:24px;font-size:28px;line-height:1.3;padding:10px 0;border-bottom:1px solid #e4edf1}.toc-entry > span{flex:0 0 48px;color:#087f8c;font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}.toc-entry > div{min-width:0;overflow-wrap:anywhere;font-weight:500}*{box-sizing:border-box}body{margin:0;background:#eef2f6;color:#192b3c;font:16px/1.7 "Segoe UI","Microsoft YaHei",sans-serif}main{background:white;max-width:900px;margin:40px auto;padding:48px 64px;border-radius:12px}h1,h2,h3,h4{line-height:1.25;color:#123a50}h1{font-size:36px}h2{font-size:28px;border-bottom:1px solid #dce6ed;padding-bottom:12px}h3{font-size:22px}a{color:#087f8c}img{max-width:100%;max-height:380px;object-fit:contain}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf3f6;padding:18px;border-radius:8px;font-size:.85em}code{font-family:Consolas,monospace}blockquote{border-left:4px solid #12a395;margin:20px 0;padding:8px 20px;background:#effaf7}table{border-collapse:collapse;width:100%}td,th{border:1px solid #d6e1e8;padding:8px 12px;text-align:left}th{background:#edf5f7}p,li{overflow-wrap:anywhere}.hljs-keyword,.hljs-selector-tag{color:#a626a4}.hljs-string{color:#287b45}.hljs-number,.hljs-literal{color:#b45b15}.hljs-comment{color:#718096}nav{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:10;background:#18394d;color:white;padding:8px 16px;border-radius:24px;display:flex;align-items:center;gap:12px}button{border:0;border-radius:16px;padding:7px 12px;cursor:pointer}body.slides main{max-width:none;padding:0;background:none;margin:0}.slide{width:1280px;height:720px;padding:48px 64px;background:white;position:relative;margin:24px auto;overflow:hidden}.slide .content{height:558px;overflow:hidden;font-size:24px;line-height:1.5}.slide h1{font-size:42px;margin:0 0 24px}.slide h2{font-size:32px}.slide footer{position:absolute;bottom:22px;left:64px;color:#6c8496;font-size:14px}.slide.cover{border-top:12px solid #0b968a}.slide.cover h1{font-size:56px}.slide img{max-height:380px}.slide p{margin:12px 0}.slide pre{font-size:18px}.slide table{font-size:20px}body.present{overflow:hidden;background:#142c3d}body.present .slide{display:none;margin:0;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(var(--scale,1))}body.present .slide.active{display:block}body.flow main{max-width:none;margin:0;padding:0;background:#f4f7fb;border-radius:0}#viewport{height:100vh;overflow:hidden;touch-action:none;cursor:grab}#graph{transform-origin:0 0}svg text{font-family:"Microsoft YaHei","Segoe UI",sans-serif}@media print{body{background:white}nav{display:none}main{margin:0;padding:0;max-width:none}.slide{margin:0!important;break-after:page;display:block!important;position:relative!important;transform:none!important;left:auto!important;top:auto!important}body.present{overflow:visible}pre,blockquote,tr,img{break-inside:avoid}h1,h2,h3{break-after:avoid}}`;
-export function wrap(title,mode,body,script='',language='zh-CN',filename=title) { messages(language);return `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${css}${mode==='slides'?mathCss()+'.katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden}.katex{overflow-wrap:normal}':''}</style></head><body class="${mode}" data-filename="${esc(filename)}">${body}<script>${script}</script></body></html>`; }
-export function slides(tokens,md,language='zh-CN',logo) {
-  const text=messages(language);
-  const branding=slideLogo(logo);
-  const pages=[]; let page;
-  for(const t of tokens) {
-    if(t.type==='def')continue;
-    if(t.type==='hr' && /^(?:\*\s*){3,}$/.test(t.raw.trim())) {page=undefined;continue;}
-    if(!page && t.type==='space')continue;
-    if(!page){
-      page={title:t.type==='heading'?t.text:text.intro,titleToken:t.type==='heading'?t:null,body:[]};pages.push(page);
-      if(t.type==='heading')continue;
-    }
-    page.body.push(t);
-  }
-  if(!pages.length) pages.push({title:text.empty,body:[]});
-  const en=language==='en',tocTitle=en?'Contents':'目录';
-  const entries=[],labels=new Map();let chapter=0,section=0,chapterTitle='';
-  const coverTitle=[pages[0].titleToken,...pages[0].body].find(t=>t?.type==='heading' && t.depth===1);
-  for(const t of tokens) {
-    if(t.type!=='heading' || t.depth>2 || t===coverTitle)continue;
-    if(t.depth===1){chapter++;section=0;chapterTitle=t.text;}else section++;
-    const number=t.depth===1?String(chapter):chapter?`${chapter}.${section}`:String(section);
-    const label=t.depth===1?(en?`Chapter ${chapter}`:`第 ${chapter} 章`):(en?`Section ${number}`:`第 ${number} 节`);
-    const header=t.depth===2 && chapter?`${en?'Chapter':'第'} ${chapter}${en?'':' 章'} · ${chapterTitle} / ${label} · ${t.text}`:`${label} · ${t.text}`;
-    labels.set(t,header);entries.push({depth:t.depth,number,title:t.text});
-  }
-  const marker=t=>labels.has(t)?` data-outline="${esc(labels.get(t))}"`:'';
-  const renderBody=body=>body.map(t=>{
-    const html=md.parser(Object.assign([t],{links:tokens.links}));
-    return labels.has(t)?html.replace(/^<h([12])>/,(_,depth)=>`<h${depth}${marker(t)}>`):html;
-  }).join('');
-  const frame=(title,body,attributes='',titleMarker='')=>`<section class="slide"${attributes}${branding.style?` style="${branding.style}"`:''}>${branding.html}<header class="chapter-label"${/data-(toc|cover)=/.test(attributes)?' hidden':''}></header><h1${titleMarker}>${md.parseInline(title)}</h1><div class="content">${body}</div><footer style="left:var(--footer-left,64px)"></footer></section>`;
-  const result=pages.map((p,i)=>frame(p.title,renderBody(p.body),i===0?' data-cover="true"':'',marker(p.titleToken)));
-  if(tokens.some(t=>!['space','def','hr'].includes(t.type))) {
-    const chapters=entries.filter(e=>e.depth===1);
-    const toc=chapters.length?chapters.map(e=>`<div class="toc-entry toc-depth-${e.depth}"><span>${e.number}</span> <div>${md.parseInline(e.title)}</div></div>`).join(''):`<p>${en?'No chapters':'暂无章节'}</p>`;
-    result.splice(1,0,frame(tocTitle,toc,` data-toc="${tocTitle}"`));
-  }
-  return result.join('');
-}
-export const slideScript=`
-function split(el){
- if(el.nodeType===3){if(el.textContent.length<2)return null;const n=Math.ceil(el.textContent.length/2);const tail=el.splitText(n);tail.remove();return tail;}
- if(el.tagName==='IMG'||el.classList?.contains('katex')||el.classList?.contains('katex-display'))return null;
- const tail=el.cloneNode(false);
- if(el.childNodes.length>1){const n=Math.ceil(el.childNodes.length/2);while(el.childNodes.length>n)tail.prepend(el.lastChild);return tail;}
- if(el.firstChild){const part=split(el.firstChild);if(part){tail.append(part);return tail;}}return null;
-}
-window.ready=(async()=>{
- await document.fonts.ready;await Promise.all([...document.images].map(i=>i.complete?Promise.resolve():new Promise(r=>{i.onload=r;i.onerror=r})));
- for(const original of [...document.querySelectorAll('.slide')]){
- let page=original,box=page.querySelector('.content');const queue=[...box.children];box.replaceChildren();let continued=0;
- const next=()=>{const n=original.cloneNode(true);n.classList.remove('cover');n.dataset.continuation='true';n.querySelector('h1').append(' · '+document.querySelector('nav').dataset.continued+' '+(++continued));n.querySelector('.content').replaceChildren();page.after(n);page=n;box=n.querySelector('.content');};
- const resizeBox=()=>{box.style.height=Math.max(80,(parseFloat(getComputedStyle(page).getPropertyValue('--content-bottom'))||640)-box.offsetTop)+'px';};
- resizeBox();
- while(queue.length){const el=queue.shift();box.append(el);if(box.scrollHeight>box.clientHeight+1){el.remove();if(box.children.length){const carry=[];while(box.lastElementChild && /^H[1-6]$/.test(box.lastElementChild.tagName)){carry.unshift(box.lastElementChild);box.lastElementChild.remove();}if(!box.children.length && carry.length){box.append(...carry);const tail=split(el);if(tail){queue.unshift(el,tail);continue;}}next();resizeBox();queue.unshift(...carry,el);}else{const tail=split(el);if(tail){queue.unshift(el,tail);}else{box.append(el);el.style.maxHeight=box.clientHeight+'px';el.style.maxWidth='100%';if(box.scrollHeight>box.clientHeight+1)throw Error(document.querySelector('nav').dataset.overflow);}}}}
- }
- const tocPages=[...document.querySelectorAll('.slide[data-toc]')];
- if(tocPages.length)document.querySelector('.slide').after(...tocPages);
- let current=document.querySelector('.chapter-label')?.textContent||'';
- for(const p of document.querySelectorAll('.slide')) {
-  const header=p.querySelector('.chapter-label');
-  if(p.dataset.toc){header.textContent='';continue;}
-  const title=p.querySelector(':scope > h1');
-  // Continuation titles repeat visually but must not reset the chapter context.
-  if(!p.dataset.continuation && title.dataset.outline)current=title.dataset.outline;
-  const headings=[...p.querySelectorAll('.content [data-outline]')];
-  const first=p.querySelector('.content').firstElementChild;
-  if(first?.dataset.outline)current=first.dataset.outline;
-  header.textContent=header.hidden?'':current;
-  for(const heading of headings)current=heading.dataset.outline;
- }
- const pages=[...document.querySelectorAll('.slide')];pages.forEach((p,i)=>p.querySelector('footer').textContent=document.body.dataset.filename+' / '+(i+1)+' / '+pages.length);
- let index=0;function show(d=0){index=Math.max(0,Math.min(pages.length-1,index+d));pages.forEach((p,i)=>p.classList.toggle('active',i===index));document.documentElement.style.setProperty('--scale',Math.min(innerWidth/1280,innerHeight/720));document.getElementById('count').textContent=(index+1)+' / '+pages.length;}
- document.getElementById('prev').onclick=()=>show(-1);document.getElementById('next').onclick=()=>show(1);document.getElementById('present').onclick=()=>{document.body.classList.toggle('present');show();};document.getElementById('full').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();addEventListener('resize',()=>show());addEventListener('keydown',e=>{if(['ArrowRight','PageDown',' '].includes(e.key)){e.preventDefault();show(1);}if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();show(-1);}if(e.key==='Escape')document.body.classList.remove('present');});show();
-})();`;
+const css=`*{box-sizing:border-box}body{margin:0;background:#eef2f6;color:#192b3c;font:16px/1.7 "Segoe UI","Microsoft YaHei",sans-serif}main{background:white;max-width:900px;margin:40px auto;padding:48px 64px;border-radius:12px}h1,h2,h3,h4{line-height:1.25;color:#123a50}h1{font-size:36px}h2{font-size:28px;border-bottom:1px solid #dce6ed;padding-bottom:12px}h3{font-size:22px}a{color:#087f8c}img{max-width:100%;max-height:380px;object-fit:contain}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf3f6;padding:18px;border-radius:8px;font-size:.85em}code{font-family:Consolas,monospace}blockquote{border-left:4px solid #12a395;margin:20px 0;padding:8px 20px;background:#effaf7}table{border-collapse:collapse;width:100%}td,th{border:1px solid #d6e1e8;padding:8px 12px;text-align:left}th{background:#edf5f7}p,li{overflow-wrap:anywhere}.hljs-keyword,.hljs-selector-tag{color:#a626a4}.hljs-string{color:#287b45}.hljs-number,.hljs-literal{color:#b45b15}.hljs-comment{color:#718096}nav{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:10;background:#18394d;color:white;padding:8px 16px;border-radius:24px;display:flex;align-items:center;gap:12px}button{border:0;border-radius:16px;padding:7px 12px;cursor:pointer}body.slides main{max-width:none;padding:0;background:none;margin:0}.slide{width:1280px;height:720px;padding:48px 64px;background:white;position:relative;margin:24px auto;overflow:hidden}.slide .content{height:558px;overflow:hidden;font-size:24px;line-height:1.5}.slide h1{font-size:42px;margin-top:0;margin-bottom:16px}.slide h2{font-size:32px}.slide footer{position:absolute;bottom:22px;left:64px;color:#6c8496;font-size:14px}.slide.cover{border-top:12px solid #0b968a}.slide.cover h1{font-size:56px}.slide img{max-height:380px}.slide p{margin:12px 0}.slide pre{font-size:18px}.slide table{font-size:20px}body.present{overflow:hidden;background:#142c3d}body.present .slide{display:none;margin:0;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(var(--scale,1))}body.present .slide.active{display:block}body.flow main{max-width:none;margin:0;padding:0;background:#f4f7fb;border-radius:0}#viewport{height:100vh;overflow:hidden;touch-action:none;cursor:grab}#graph{transform-origin:0 0}svg text{font-family:"Microsoft YaHei","Segoe UI",sans-serif}@media print{body{background:white}nav{display:none}main{margin:0;padding:0;max-width:none}.slide{margin:0!important;break-after:page;display:block!important;position:relative!important;transform:none!important;left:auto!important;top:auto!important}body.present{overflow:visible}pre,blockquote,tr,img{break-inside:avoid}h1,h2,h3{break-after:avoid}}`;
+export function wrap(title,mode,body,script='',language='zh-CN',filename=title) { messages(language);return `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${css}${mode==='slides'?slideCss+mathCss()+'.katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden}.katex{overflow-wrap:normal}':''}</style></head><body class="${mode}" data-filename="${esc(filename)}">${body}<script>${script}</script></body></html>`; }
 export function slideNavigation(language='zh-CN') {
  const t=messages(language);
  return `<nav data-continued="${t.continued}" data-overflow="${t.overflow}"><button id="prev" aria-label="${t.prev}" title="${t.prev}">←</button><span id="count"></span><button id="next" aria-label="${t.next}" title="${t.next}">→</button><button id="present">${t.present}</button><button id="full">${t.full}</button></nav>`;
