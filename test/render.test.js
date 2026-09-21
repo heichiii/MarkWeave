@@ -125,6 +125,26 @@ test('长段落、列表、代码跨页无丢失，无垂直溢出；演示可�
  await page.click('#present');await page.keyboard.press('ArrowRight');assert.equal(await page.locator('.slide.active footer').textContent(),`test / 2 / ${result.count} · 续页 1`);
  }finally{await browser.close();}
 });
+test('非全屏演示显示可跳转的左侧缩略图，全屏时隐藏',async()=>{
+ const md=parser('.'),source='# 第一页\n\n正文\n\n***\n\n## 第二页\n\n内容\n\n***\n\n## 第三页\n\n结尾';
+ const browser=await browserLaunch();
+ try {
+  const page=await browser.newPage({viewport:{width:1400,height:900}});
+  await page.setContent(wrap('thumbnails','slides',`<main>${slides(md.lexer(source),md)}</main>${slideNav}`,slideScript));await page.evaluate(()=>window.ready);
+  const pageCount=await page.locator('main > .slide').count();
+  assert.equal(await page.locator('#slide-thumbnails').isVisible(),false);
+  assert.equal(await page.locator('.slide-thumbnail').count(),pageCount);
+  assert.equal(await page.locator('.slide').count(),pageCount,'缩略图副本不应混入实际幻灯片');
+  await page.click('#present');
+  assert.equal(await page.locator('#slide-thumbnails').isVisible(),true);
+  assert.ok((await page.locator('.slide.active').boundingBox()).x>=219,'当前幻灯片应为左侧缩略图栏留出空间');
+  await page.locator('.slide-thumbnail').nth(2).click();
+  assert.match(await page.locator('.slide.active .page-title').textContent(),/第二页/);
+  assert.equal(await page.locator('.slide-thumbnail.active').getAttribute('aria-label'),'跳转到第 3 页');
+  await page.evaluate(()=>document.body.classList.add('fullscreen'));
+  assert.equal(await page.locator('#slide-thumbnails').isVisible(),false);
+ } finally {await browser.close();}
+});
 test('三份样例预览无脚本错误、图片可解码并保存检查图',async()=>{
  await fs.mkdir('tmp/qa',{recursive:true});const browser=await browserLaunch();
  try{for(const mode of ['document','slides','flow']){const file=await render(`examples/${mode}.md`,{mode});const page=await browser.newPage({viewport:{width:1400,height:950}});const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(new URL('file:///'+file.replaceAll('\\','/')).href);await page.evaluate(async()=>{await window.ready;await Promise.all([...document.images].map(i=>i.decode()));});assert.deepEqual(errors,[]);await page.screenshot({path:`tmp/qa/${mode}.png`});await page.close();}}finally{await browser.close();}
